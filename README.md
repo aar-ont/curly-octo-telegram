@@ -33,6 +33,33 @@ for them — reconstructing the supplier data Shopify would not let them export.
 3. [`docs/03-build-plan.md`](docs/03-build-plan.md) — MVP scope and architecture
 4. [`docs/04-pricing-launch.md`](docs/04-pricing-launch.md) — pricing and the two demand waves
 5. [`docs/05-constraints.md`](docs/05-constraints.md) — Partner account, payouts, time budget
+6. [`docs/06-costs.md`](docs/06-costs.md) — what it costs to start (about $31)
+
+## The code
+
+A Shopify Remix app scaffold with the domain logic built and tested:
+
+```
+app/lib/matching     variant matching — exact SKU, loose SKU, then title
+app/lib/reorder      sales velocity, days of cover, MOQ-aware suggestions
+app/lib/po           PO state machine and supplier-reply policy
+app/lib/extraction   Claude structured extraction + batch path
+app/lib/shopify      paginated catalogue and sales reads
+app/routes           embedded admin UI (import, reorder, webhooks)
+```
+
+```bash
+npm install
+npx prisma generate && npx prisma migrate dev   # local SQLite
+npm test          # 59 tests
+npm run typecheck
+npm run build
+```
+
+The logic modules are pure and tested without a store or an API key, which is
+deliberate: those are the parts that decide what a merchant sees, so they are
+the parts that need to be arguable. `npm run dev` requires the Partner account
+and app credentials from `docs/05-constraints.md`.
 
 ## The honest summary
 

@@ -1,0 +1,28 @@
+# Filled in by `shopify app config link` once the Partner account exists.
+# See docs/05-constraints.md — the Partner account must be in an adult's name.
+client_id = ""
+name = "Restock"
+handle = "restock"
+application_url = "https://example.com"
+embedded = true
+
+[access_scopes]
+scopes = "read_products,write_products,read_inventory,write_inventory,read_orders,read_locations"
+
+[auth]
+redirect_urls = ["https://example.com/auth/callback", "https://example.com/auth/shopify/callback"]
+
+[webhooks]
+api_version = "2025-10"
+
+  [[webhooks.subscriptions]]
+  topics = ["app/uninstalled"]
+  uri = "/webhooks"
+
+  # Required for App Store review. Apps are rejected for missing these.
+  [[webhooks.subscriptions]]
+  topics = ["customers/data_request", "customers/redact", "shop/redact"]
+  uri = "/webhooks"
+
+[pos]
+embedded = false
