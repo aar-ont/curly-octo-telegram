@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { unstable_createMemoryUploadHandler, unstable_parseMultipartFormData } from "@remix-run/node";
-import { Form, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
+import { useActionData, useLoaderData, useNavigation, useSubmit } from "@remix-run/react";
 import {
   Badge,
   Banner,
@@ -142,6 +142,15 @@ export default function Migrate() {
   const navigation = useNavigation();
   const busy = navigation.state === "submitting";
   const [files, setFiles] = useState<File[]>([]);
+  const submit = useSubmit();
+
+  // Polaris DropZone keeps its files in React state, so build the multipart
+  // body directly rather than trying to push them back into a file input.
+  const upload = () => {
+    const body = new FormData();
+    files.forEach((file) => body.append("documents", file));
+    submit(body, { method: "post", encType: "multipart/form-data" });
+  };
 
   return (
     <Page title="Import suppliers" subtitle="Rebuild the supplier data Stocky could not export">
@@ -156,52 +165,35 @@ export default function Migrate() {
 
         <Layout.Section>
           <Card>
-            <Form method="post" encType="multipart/form-data">
-              <BlockStack gap="400">
-                <Text as="p">
-                  Upload old purchase orders, supplier price lists, or exported spreadsheets. Anything readable works —
-                  including photos of paper. Nothing is saved until you have reviewed it.
-                </Text>
+            <BlockStack gap="400">
+              <Text as="p">
+                Upload old purchase orders, supplier price lists, or exported spreadsheets. Anything readable works —
+                including photos of paper. Nothing is saved until you have reviewed it.
+              </Text>
 
-                <DropZone
-                  accept="application/pdf,image/*,text/csv,text/plain"
-                  onDrop={(accepted: File[]) => setFiles(accepted)}
-                >
-                  {files.length > 0 ? (
-                    <BlockStack gap="100">
-                      {files.map((f) => (
-                        <Text as="p" key={f.name}>
-                          {f.name}
-                        </Text>
-                      ))}
-                    </BlockStack>
-                  ) : (
-                    <DropZone.FileUpload actionTitle="Add files" actionHint="PDF, image, CSV or email" />
-                  )}
-                </DropZone>
+              <DropZone
+                accept="application/pdf,image/*,text/csv,text/plain"
+                onDrop={(accepted: File[]) => setFiles(accepted)}
+              >
+                {files.length > 0 ? (
+                  <BlockStack gap="100">
+                    {files.map((f) => (
+                      <Text as="p" key={f.name}>
+                        {f.name}
+                      </Text>
+                    ))}
+                  </BlockStack>
+                ) : (
+                  <DropZone.FileUpload actionTitle="Add files" actionHint="PDF, image, CSV or email" />
+                )}
+              </DropZone>
 
-                {/* DropZone holds the files in React state; this mirrors them
-                    into the form so a normal multipart POST carries them. */}
-                <input
-                  type="file"
-                  name="documents"
-                  multiple
-                  hidden
-                  ref={(input) => {
-                    if (!input) return;
-                    const transfer = new DataTransfer();
-                    files.forEach((f) => transfer.items.add(f));
-                    input.files = transfer.files;
-                  }}
-                />
-
-                <div>
-                  <Button submit variant="primary" loading={busy} disabled={files.length === 0}>
-                    Extract suppliers
-                  </Button>
-                </div>
-              </BlockStack>
-            </Form>
+              <div>
+                <Button variant="primary" loading={busy} disabled={files.length === 0} onClick={upload}>
+                  Extract suppliers
+                </Button>
+              </div>
+            </BlockStack>
           </Card>
         </Layout.Section>
 
