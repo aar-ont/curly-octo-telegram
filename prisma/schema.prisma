@@ -1,0 +1,145 @@
+// Deliberately small. Every field here earns its place; resist the urge to
+// grow this into a general inventory management system. See docs/03-build-plan.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite" // swap to "postgresql" for production
+  url      = env("DATABASE_URL")
+}
+
+// Shopify's Remix session storage owns this table's shape.
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+}
+
+model Shop {
+  id          String   @id @default(cuid())
+  domain      String   @unique
+  plan        String   @default("trial")
+  installedAt DateTime @default(now())
+
+  suppliers      Supplier[]
+  purchaseOrders PurchaseOrder[]
+  imports        ImportJob[]
+}
+
+model Supplier {
+  id           String  @id @default(cuid())
+  shopId       String
+  name         String
+  email        String?
+  phone        String?
+  address      String?
+  // Drives the reorder calculation. Defaulting to 14 is a guess the merchant
+  // should correct; surface it as an editable field rather than hiding it.
+  leadTimeDays Int     @default(14)
+  notes        String?
+
+  shop           Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  items          SupplierItem[]
+  purchaseOrders PurchaseOrder[]
+
+  @@unique([shopId, name])
+  @@index([shopId])
+}
+
+model SupplierItem {
+  id          String  @id @default(cuid())
+  supplierId  String
+  // Shopify variant GID. Null means the import could not match it to a
+  // variant and the merchant has not resolved it yet.
+  variantId   String?
+  supplierSku String?
+  title       String?
+  unitCost    Float?
+  moq         Int     @default(1)
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+  @@index([variantId])
+}
+
+model PurchaseOrder {
+  id         String    @id @default(cuid())
+  shopId     String
+  supplierId String
+  status     String    @default("draft") // see app/lib/po/state.ts
+  reference  String
+  // Unique per-PO inbound address token. Supplier replies land here, which is
+  // how the follow-up agent knows which PO a message belongs to.
+  replyToken String    @unique
+  expectedAt DateTime?
+  sentAt     DateTime?
+  closedAt   DateTime?
+  createdAt  DateTime  @default(now())
+
+  shop     Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  supplier Supplier  @relation(fields: [supplierId], references: [id])
+  lines    POLine[]
+  events   POEvent[]
+
+  @@index([shopId, status])
+}
+
+model POLine {
+  id          String  @id @default(cuid())
+  poId        String
+  variantId   String
+  title       String
+  supplierSku String?
+  qtyOrdered  Int
+  qtyReceived Int     @default(0)
+  unitCost    Float
+
+  po PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+
+  @@index([poId])
+}
+
+// Append-only. Every agent action leaves a record here so that when a merchant
+// asks "why does it say this arrives Thursday", there is an answer.
+model POEvent {
+  id        String   @id @default(cuid())
+  poId      String
+  kind      String // email_in | email_out | parsed | status_change | note
+  payload   String // JSON
+  createdAt DateTime @default(now())
+
+  po PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+
+  @@index([poId, createdAt])
+}
+
+model ImportJob {
+  id        String   @id @default(cuid())
+  shopId    String
+  filename  String
+  status    String   @default("pending") // pending | extracting | review | applied | failed
+  // Raw extraction output, kept so a bad parse can be inspected against the
+  // source rather than guessed at.
+  result    String?
+  error     String?
+  createdAt DateTime @default(now())
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, status])
+}
